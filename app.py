@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import datetime
-import time
 from urllib.parse import quote
 
 # 1. SETTING TAMPILAN
@@ -16,69 +15,96 @@ st.markdown("""
     .engineer-header { font-weight: bold; color: black; margin-top: 15px; text-decoration: underline; font-size: 16px; }
     .date-header { font-weight: bold; color: #333; margin-left: 10px; margin-top: 5px; font-size: 14px; }
     .item-list { margin-left: 25px; color: #444; font-size: 14px; margin-bottom: 2px; }
+    
+    /* Tombol Animasi */
+    .mega-btn {
+        display: block; width: 100%; padding: 15px; 
+        background-color: #d32f2f; color: white !important; 
+        border: none; border-radius: 10px; font-weight: bold;
+        font-size: 16px; cursor: pointer; margin-bottom: 10px;
+    }
+    #status-text { font-size: 14px; color: #1565c0; font-weight: bold; text-align: center; margin-bottom: 5px; }
+    .progress-container { width: 100%; background-color: #ddd; border-radius: 5px; margin-bottom: 20px; display: none; }
+    .progress-bar { width: 0%; height: 10px; background-color: #2e7d32; border-radius: 5px; transition: width 0.3s; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. LOGIKA URL VCARE
-def get_report_data():
+# 2. DATA URL
+def get_report_urls():
     today = datetime.date.today()
     date_from = today.replace(day=1).strftime("%d-%b-%Y")
     date_to = today.strftime("%d-%b-%Y")
     enc = lambda s: quote(s)
     base = "https://vcare.visionet.co.id/Report/DownloadReportByStatus"
-    
     return [
-        {"name": "Scheduled", "url": f"{base}?DateFrom={enc(date_from)}&DateTo={enc(date_to)}&WorkActivity=Scheduled"},
-        {"name": "Booked", "url": f"{base}?DateFrom={enc(date_from)}&DateTo={enc(date_to)}&WorkActivity=Booked"},
-        {"name": "On Progress", "url": f"{base}?DateFrom={enc(date_from)}&DateTo={enc(date_to)}&WorkActivity=On%20Progress"}
+        {"n": "Scheduled", "u": f"{base}?DateFrom={enc(date_from)}&DateTo={enc(date_to)}&WorkActivity=Scheduled"},
+        {"n": "Booked", "u": f"{base}?DateFrom={enc(date_from)}&DateTo={enc(date_to)}&WorkActivity=Booked"},
+        {"n": "On Progress", "u": f"{base}?DateFrom={enc(date_from)}&DateTo={enc(date_to)}&WorkActivity=On%20Progress"}
     ]
 
 # 3. AMBIL SECRETS
 try:
     GOOGLE_SHEET_URL = st.secrets["GSHEET_URL"]
 except:
-    st.error("⚠️ Konfigurasi Secrets 'GSHEET_URL' tidak ditemukan!")
+    st.error("⚠️ Secrets 'GSHEET_URL' belum diisi!")
     st.stop()
-
-if 'reset_key' not in st.session_state:
-    st.session_state.reset_key = 0
 
 st.title("📲 Monitoring WO Real-time")
 
-# --- SEKSI 1: DOWNLOAD DENGAN ANIMASI SEKUENSIAL ---
+# --- SEKSI 1: DOWNLOADER DENGAN ANTRIAN JAVASCRIPT ---
 st.subheader("1. Download Data VCare")
 
-reports = get_report_data()
+urls_data = get_report_urls()
 
-if st.button("🚀 MULAI DOWNLOAD BERURUTAN", use_container_width=True):
-    progress_text = st.empty()
-    bar = st.progress(0)
-    
-    for i, report in enumerate(reports):
-        # Update UI seolah-olah sedang memproses
-        progress_text.info(f"Mempersiapkan download: **{report['name']}**...")
-        
-        # Animasi loading singkat per file
-        for percent in range(100):
-            time.sleep(0.01)
-            bar.progress((i * 33) + int(percent / 3))
-        
-        # Trigger download menggunakan JavaScript di tab baru
-        st.markdown(f"""
-            <script>
-                window.open('{report['url']}', '_blank');
-            </script>
-        """, unsafe_allow_html=True)
-        
-        time.sleep(1.5)  # Jeda jeda agar browser tidak menganggap spam
-    
-    bar.progress(100)
-    progress_text.success("Semua permintaan download telah dikirim ke browser!")
+# Komponen HTML & JavaScript untuk menangani antrean download
+js_component = f"""
+    <div id="status-text">Siap mendownload...</div>
+    <div id="p-container" class="progress-container"><div id="p-bar" class="progress-bar"></div></div>
+    <button onclick="startSequence()" class="mega-btn">🚀 DOWNLOAD BERURUTAN (3 FILE)</button>
 
-st.caption("💡 Jika download tidak jalan, pastikan izin 'Pop-up' di browser HP sudah **Allowed**.")
+    <script>
+    async function startSequence() {{
+        const reports = {urls_data};
+        const btn = document.querySelector('.mega-btn');
+        const status = document.getElementById('status-text');
+        const container = document.getElementById('p-container');
+        const bar = document.getElementById('p-bar');
+
+        btn.disabled = true;
+        btn.style.backgroundColor = '#999';
+        container.style.display = 'block';
+
+        for (let i = 0; i < reports.length; i++) {{
+            status.innerText = "Mendownload: " + reports[i].n + "...";
+            bar.style.width = ((i + 1) / reports.length * 100) + "%";
+            
+            // Trigger download
+            const link = document.createElement('a');
+            link.href = reports[i].u;
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // Menunggu 2 detik sebelum file berikutnya untuk memastikan browser memproses
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }}
+
+        status.innerText = "✅ Selesai! Silakan cek folder Download.";
+        btn.disabled = false;
+        btn.style.backgroundColor = '#d32f2f';
+    }}
+    </script>
+"""
+st.markdown(js_component, unsafe_allow_html=True)
+st.caption("💡 Jika hanya 1 file yang terdownload, klik ikon 'Pop-up Blocked' di address bar lalu pilih **Always Allow**.")
+
 st.markdown("---")
 
 # --- SEKSI 2: PENGOLAHAN DATA ---
+if 'reset_key' not in st.session_state:
+    st.session_state.reset_key = 0
+
 @st.cache_data(ttl=300)
 def get_blacklist_data(sheet_url):
     try:
@@ -100,7 +126,6 @@ if uploaded_files:
         
         df = pd.concat(dfs, ignore_index=True)
 
-        # Filter Blacklist
         if 'TicketNo' in df.columns and blacklist:
             df = df[~df['TicketNo'].astype(str).str.strip().isin(blacklist)]
 
@@ -111,8 +136,8 @@ if uploaded_files:
         if not df.empty:
             if 'ActualTargetDate' in df.columns:
                 df['ActualTargetDate'] = pd.to_datetime(df['ActualTargetDate']).dt.strftime('%Y-%m-%d')
-            
             df = df.sort_values(['EngineerName', 'ActualTargetDate', 'MerchantName'])
+            
             res_txt = ""
             for eng, g_eng in df.groupby('EngineerName'):
                 h = str(eng).upper()
@@ -129,4 +154,4 @@ if uploaded_files:
                 res_txt += "\n"
             st.text_area("📋 Copy Hasil:", value=res_txt, height=200)
     except:
-        st.error("Gagal memproses file. Pastikan kolom sesuai.")
+        st.error("Gagal memproses file.")
