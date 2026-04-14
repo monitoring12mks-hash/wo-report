@@ -1,58 +1,67 @@
 import streamlit as st
 import pandas as pd
 
-# Konfigurasi halaman
-st.set_page_config(page_title="WO Reporter Full", page_icon="📝")
+# Setting halaman agar lebih ramping
+st.set_page_config(page_title="WO Reporter", page_icon="📲")
 
-st.title("📲 WhatsApp Report Generator")
-st.write("Menampilkan semua data dari file WO History")
+# Sembunyikan menu bawaan streamlit agar lebih bersih saat di-screenshot
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader("Upload File Excel / CSV", type=['xlsx', 'csv'])
+st.title("📲 Report Kerja Engineer")
+
+uploaded_file = st.file_uploader("Upload file Excel/CSV di sini", type=['xlsx', 'csv'])
 
 if uploaded_file:
     try:
-        # Membaca File
+        # Membaca file
         if uploaded_file.name.endswith('.csv'):
             df = pd.read_csv(uploaded_file)
         else:
             df = pd.read_excel(uploaded_file, engine='openpyxl')
         
-        # Bersihkan nama kolom dari spasi
+        # Bersihkan nama kolom
         df.columns = [c.strip() for c in df.columns]
-        
+
         # Pastikan kolom EngineerName, MerchantName, dan WorkActivity ada
-        # Jika nama kolom berbeda di file Anda, kode ini akan mencoba mencarinya
+        # Jika tidak ada, kita coba ambil berdasarkan posisi kolom
         eng_col = 'EngineerName' if 'EngineerName' in df.columns else df.columns[-1]
         merch_col = 'MerchantName' if 'MerchantName' in df.columns else df.columns[4]
         act_col = 'WorkActivity' if 'WorkActivity' in df.columns else df.columns[7]
 
-        # MENGATASI ERROR: Ubah semua nama engineer menjadi teks dan isi yang kosong dengan "Tanpa Nama"
-        df[eng_col] = df[eng_col].fillna("Belum Ditentukan").astype(str)
-        
-        # Tampilan Ringkasan
-        st.subheader(f"✅ Total {len(df)} Data Berhasil Dimuat")
+        # Ubah semua ke string dan tangani data kosong
+        df[eng_col] = df[eng_col].fillna("Tanpa Nama").astype(str)
+        df[merch_col] = df[merch_col].fillna("-").astype(str)
+        df[act_col] = df[act_col].fillna("-").astype(str)
+
         st.markdown("---")
         
-        # Urutkan berdasarkan Engineer (Sekarang aman dari error '<')
+        # Ambil daftar engineer unik dan urutkan
         engineers = sorted(df[eng_col].unique())
-        
+
+        # LOOP UTAMA: Membuat tampilan teks seperti gambar
         for engineer in engineers:
             group = df[df[eng_col] == engineer]
             
-            # Header Nama Engineer
-            st.markdown(f"### 👷 *{engineer}* ({len(group)} Task)")
+            # Tampilkan Nama Engineer (Bold)
+            st.markdown(f"**{engineer}**")
             
-            # Daftar pekerjaan di bawah nama engineer
-            for i, row in group.iterrows():
-                m_name = str(row[merch_col]) if pd.notna(row[merch_col]) else "Merchant Tidak Diketahui"
-                w_act = str(row[act_col]) if pd.notna(row[act_col]) else "Aktivitas Tidak Diketahui"
-                
-                st.markdown(f"• **{m_name}**\n  _{w_act}_")
+            # Tampilkan list pekerjaan (Bullet points)
+            for _, row in group.iterrows():
+                # Format: Nama Merchant - Jenis Pekerjaan
+                st.write(f"• {row[merch_col]} - {row[act_col]}")
             
-            st.markdown("---")
-            
-        st.success("Selesai! Silakan screenshot hasil di atas.")
-            
+            # Beri sedikit ruang antar engineer
+            st.write("")
+
+        st.markdown("---")
+        st.caption("Gunakan screenshot HP untuk mengirim hasil di atas ke WhatsApp.")
+
     except Exception as e:
-        st.error(f"Terjadi kesalahan teknis: {e}")
-        st.info("Saran: Pastikan file yang diupload adalah file data mentah (WO History).")
+        st.error(f"Terjadi kesalahan: {e}")
