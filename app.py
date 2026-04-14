@@ -14,44 +14,48 @@ st.markdown("""
     .engineer-header { font-weight: bold; color: black; margin-top: 15px; text-decoration: underline; font-size: 16px; }
     .date-header { font-weight: bold; color: #333; margin-left: 10px; margin-top: 5px; font-size: 14px; }
     .item-list { margin-left: 25px; color: #444; font-size: 14px; margin-bottom: 2px; }
+    .stButton>button { width: 100%; border-radius: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. FUNGSI AMBIL DATA DARI GOOGLE SHEETS DENGAN PEMBERSIHAN EXTRA
+# Inisialisasi session state untuk reset
+if 'reset_key' not in st.session_state:
+    st.session_state.reset_key = 0
+
+def reset_app():
+    # Menaikkan nilai key agar uploader ter-reset total
+    st.session_state.reset_key += 1
+    # Hapus data lain di session state jika ada
+    st.rerun()
+
+# 2. FUNGSI AMBIL DATA GOOGLE SHEETS
 @st.cache_data(ttl=300)
 def get_blacklist_data(sheet_url):
     try:
-        # Konversi link ke format ekspor CSV
+        if not sheet_url or "google.com" not in sheet_url:
+            return []
         csv_url = sheet_url.replace('/edit?usp=sharing', '/export?format=csv').split('/edit')[0] + '/export?format=csv'
         blacklist_df = pd.read_csv(csv_url)
-        
-        # Ambil kolom TicketNo, ubah ke string, hilangkan spasi, dan hapus jika ada yang kosong
         if 'TicketNo' in blacklist_df.columns:
             return blacklist_df['TicketNo'].astype(str).str.strip().unique().tolist()
         return []
-    except Exception as e:
-        st.error(f"Gagal memuat Google Sheets: {e}")
+    except:
         return []
-
-def reset_app():
-    for key in st.session_state.keys():
-        del st.session_state[key]
-    st.rerun()
 
 st.title("📲 Pro WO Reporter")
 
-# GANTI INI dengan Link Google Sheets Anda yang sudah "Anyone with the link can view"
+# --- MASUKKAN LINK GOOGLE SHEETS ANDA DI SINI ---
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1mhdwIlP20HmtmlYb0BP-vfH32jiE82m5GGq6_yCaYSk/edit?gid=758149661#gid=758149661"
 
 blacklist_tickets = get_blacklist_data(GOOGLE_SHEET_URL)
 
-# Menampilkan indikator jika blacklist berhasil dimuat
-if blacklist_tickets:
-    st.sidebar.success(f"✅ {len(blacklist_tickets)} Tiket Pembanding Aktif")
-else:
-    st.sidebar.warning("⚠️ Data Pembanding Kosong / Link Salah")
-
-uploaded_files = st.file_uploader("Upload file WO History", type=['xlsx', 'csv'], accept_multiple_files=True)
+# File Uploader dengan Key Dinamis (Solusi Tombol Reset)
+uploaded_files = st.file_uploader(
+    "Upload file WO History", 
+    type=['xlsx', 'csv'], 
+    accept_multiple_files=True, 
+    key=f"uploader_{st.session_state.reset_key}"
+)
 
 if uploaded_files:
     try:
@@ -66,26 +70,24 @@ if uploaded_files:
         
         df = pd.concat(all_df, ignore_index=True)
 
-        # PROSES FILTERING YANG LEBIH KETAT
+        # FILTER DATA PEMBANDING (TicketNo)
         if 'TicketNo' in df.columns and blacklist_tickets:
-            # Bersihkan data TicketNo di file upload (ubah ke string & buang spasi)
-            df['TicketNo_Clean'] = df['TicketNo'].astype(str).str.strip()
-            
-            # Filter: Hanya simpan yang TIDAK ADA di blacklist
+            df['TicketNo_Str'] = df['TicketNo'].astype(str).str.strip()
             initial_count = len(df)
-            df = df[~df['TicketNo_Clean'].isin(blacklist_tickets)]
-            
-            removed_count = initial_count - len(df)
-            if removed_count > 0:
-                st.warning(f"ℹ️ {removed_count} data disembunyikan karena ada di Data Pembanding.")
+            # Menghilangkan data yang ada di blacklist
+            df = df[~df['TicketNo_Str'].isin(blacklist_tickets)]
+            removed = initial_count - len(df)
+            if removed > 0:
+                st.sidebar.info(f"🚫 {removed} Tiket Pembanding disembunyikan")
 
-        # Filter WorkActivity
+        # FILTER WORK ACTIVITY
         if 'WorkActivity' in df.columns:
             all_activities = sorted(df['WorkActivity'].unique().astype(str))
-            selected_activities = st.multiselect("Filter WorkActivity:", options=all_activities, default=all_activities)
+            selected_activities = st.multiselect("Pilih WorkActivity:", options=all_activities, default=all_activities)
             df = df[df['WorkActivity'].isin(selected_activities)]
 
-        if st.button("🔄 Mulai Dari Awal"):
+        # TOMBOL RESET (DIPERBAIKI)
+        if st.button("🔄 MULAI DARI AWAL"):
             reset_app()
 
         st.markdown("---")
@@ -116,6 +118,10 @@ if uploaded_files:
 
             st.markdown("---")
             st.text_area("Copy Teks Laporan:", value=full_text_report, height=250)
+        else:
+            st.warning("Data kosong setelah difilter.")
             
     except Exception as e:
         st.error(f"Error: {e}")
+        if st.button("Reset Sistem"):
+            reset_app()
