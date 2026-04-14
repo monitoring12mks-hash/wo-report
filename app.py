@@ -3,7 +3,7 @@ import pandas as pd
 import datetime
 from urllib.parse import quote
 
-
+# 1. SETTING TAMPILAN
 st.set_page_config(page_title="WO Reporter Pro", layout="centered")
 
 st.markdown("""
@@ -17,12 +17,10 @@ st.markdown("""
     .date-header { font-weight: bold; color: #333; margin-left: 10px; margin-top: 5px; font-size: 14px; }
     .item-list { margin-left: 25px; color: #444; font-size: 14px; margin-bottom: 2px; }
     
-    /* Tombol Download */
     .download-btn { 
         display: block; text-align: center; padding: 10px; background-color: #2e7d32; color: white !important; 
         text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: bold; margin-bottom: 8px;
     }
-    /* Tombol Buka Folder */
     .folder-btn { 
         display: block; text-align: center; padding: 10px; background-color: #f57c00; color: white !important; 
         text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: bold; margin-bottom: 20px;
@@ -31,7 +29,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-
+# 2. LOGIKA URL
 def get_report_urls():
     today = datetime.date.today()
     date_from = today.replace(day=1).strftime("%d-%b-%Y")
@@ -51,23 +49,19 @@ def full_reset():
     st.session_state.reset_key += 1
     st.rerun()
 
-
 st.title("📲 Monitoring WO Real-time")
 
-
+# LANGKAH 1
 st.subheader("Langkah 1: Ambil Data & Kelola File")
 links = get_report_urls()
 for name, url in links.items():
     st.markdown(f'<a href="{url}" target="_blank" class="download-btn">{name}</a>', unsafe_allow_html=True)
 
-
-# Catatan: Protokol 'file:///' bekerja berbeda-beda tiap OS/Browser
-st.markdown('<a href="file:///C:/Users/User/Downloads" class="folder-btn">📂 BUKA FOLDER DOWNLOAD (PC/LAPTOP)</a>', unsafe_allow_html=True)
-st.caption("Catatan: Jika tombol folder tidak terbuka otomatis (karena proteksi browser), silakan buka folder 'Downloads' manual di HP/PC Anda untuk menghapus file lama.")
+st.markdown('<a href="file:///C:/Users/User/Downloads" class="folder-btn">📂 BUKA FOLDER DOWNLOAD (PC)</a>', unsafe_allow_html=True)
 
 st.markdown("---")
 
-
+# LANGKAH 2
 st.subheader("Langkah 2: Upload & Gabung")
 GOOGLE_SHEET_URL = st.secrets["GSHEET_URL"]
 
@@ -80,7 +74,6 @@ uploaded_files = st.file_uploader(
 
 if uploaded_files:
     try:
-        # (Logika pengolahan data sama seperti sebelumnya)
         dfs = []
         for f in uploaded_files:
             df_temp = pd.read_csv(f) if f.name.endswith('.csv') else pd.read_excel(f, engine='openpyxl')
@@ -89,7 +82,16 @@ if uploaded_files:
         
         df = pd.concat(dfs, ignore_index=True)
 
-        # Logika Filter & Tampilan
+        # --- TAMBAHAN FILTER WORK ACTIVITY ---
+        if 'WorkActivity' in df.columns:
+            list_activity = sorted(df['WorkActivity'].unique().astype(str))
+            selected_activity = st.multiselect(
+                "Filter Work Activity yang ingin ditampilkan:",
+                options=list_activity,
+                default=list_activity
+            )
+            df = df[df['WorkActivity'].isin(selected_activity)]
+
         if st.button("🗑️ RESET APLIKASI"):
             full_reset()
 
