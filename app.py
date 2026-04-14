@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import pytz
 from urllib.parse import quote
 
 # 1. SETTING TAMPILAN
@@ -21,54 +22,50 @@ st.markdown("""
         display: block; text-align: center; padding: 10px; background-color: #2e7d32; color: white !important; 
         text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: bold; margin-bottom: 8px;
     }
-    .folder-btn { 
-        display: block; text-align: center; padding: 10px; background-color: #f57c00; color: white !important; 
-        text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: bold; margin-bottom: 20px;
-        border: 2px solid #e65100;
-    }
     </style>
     """, unsafe_allow_html=True)
 
-def get_report_urls():
-    # Mengambil tanggal hari ini secara otomatis
-    today = datetime.date.today()
-    
-    # Otomatis menetapkan tanggal 1 pada bulan berjalan
-    date_from_obj = today.replace(day=1)
-    
-    # Format ke "dd-mmm-yyyy" (Contoh: 01-Apr-2026) sesuai kebutuhan VCare
-    date_from = date_from_obj.strftime("%d-%b-%Y")
-    date_to = today.strftime("%d-%b-%Y")
-    
+# --- LOGIKA ZONA WAKTU ---
+tz_jkt = pytz.timezone('Asia/Jakarta')
+now_jkt = datetime.datetime.now(tz_jkt).date()
+
+st.title("📲 Monitoring WO Real-time")
+
+# --- SEKSI PILIH TANGGAL (RANGE) ---
+st.subheader("Pilih Rentang Tanggal Download")
+col1, col2 = st.columns(2)
+
+with col1:
+    start_date = st.date_input("Dari Tanggal:", now_jkt.replace(day=1))
+with col2:
+    end_date = st.date_input("Sampai Tanggal:", now_jkt)
+
+def get_report_urls(d_from, d_to):
+    # Format sesuai kebutuhan VCare (01-Apr-2026)
+    f_from = d_from.strftime("%d-%b-%Y")
+    f_to = d_to.strftime("%d-%b-%Y")
     enc = lambda s: quote(s)
     base = "https://vcare.visionet.co.id/Report/DownloadReportByStatus"
     
     return {
-        "📥 DOWNLOAD SCHEDULED": f"{base}?DateFrom={enc(date_from)}&DateTo={enc(date_to)}&WorkActivity=Scheduled",
-        "📥 DOWNLOAD BOOKED": f"{base}?DateFrom={enc(date_from)}&DateTo={enc(date_to)}&WorkActivity=Booked",
-        "📥 DOWNLOAD ON PROGRESS": f"{base}?DateFrom={enc(date_from)}&DateTo={enc(date_to)}&WorkActivity=On%20Progress"
+        f"📥 DOWNLOAD SCHEDULED ({f_to})": f"{base}?DateFrom={enc(f_from)}&DateTo={enc(f_to)}&WorkActivity=Scheduled",
+        f"📥 DOWNLOAD BOOKED ({f_to})": f"{base}?DateFrom={enc(f_from)}&DateTo={enc(f_to)}&WorkActivity=Booked",
+        f"📥 DOWNLOAD ON PROGRESS ({f_to})": f"{base}?DateFrom={enc(f_from)}&DateTo={enc(date_to if 'date_to' in locals() else f_to)}&WorkActivity=On%20Progress"
     }
 
-if 'reset_key' not in st.session_state:
-    st.session_state.reset_key = 0
-
-def full_reset():
-    st.session_state.reset_key += 1
-    st.rerun()
-
-st.title("📲 Monitoring WO Real-time")
-
-st.subheader("Langkah 1: Ambil Data & Kelola File")
-links = get_report_urls()
+# --- LANGKAH 1 ---
+st.subheader("Langkah 1: Download Data")
+links = get_report_urls(start_date, end_date)
 for name, url in links.items():
     st.markdown(f'<a href="{url}" target="_blank" class="download-btn">{name}</a>', unsafe_allow_html=True)
 
-st.markdown('<a href="file:///C:/Users/User/Downloads" class="folder-btn">📂 BUKA FOLDER DOWNLOAD (PC)</a>', unsafe_allow_html=True)
-
 st.markdown("---")
 
+# --- LANGKAH 2 ---
 st.subheader("Langkah 2: Upload & Gabung")
-GOOGLE_SHEET_URL = st.secrets["GSHEET_URL"]
+
+if 'reset_key' not in st.session_state:
+    st.session_state.reset_key = 0
 
 uploaded_files = st.file_uploader(
     "Tarik file ke sini:", 
@@ -87,31 +84,24 @@ if uploaded_files:
         
         df = pd.concat(dfs, ignore_index=True)
 
+        # Filter Work Activity
         if 'WorkActivity' in df.columns:
             list_activity = sorted(df['WorkActivity'].unique().astype(str))
-            selected_activity = st.multiselect(
-                "Filter Work Activity:",
-                options=list_activity,
-                default=list_activity
-            )
+            selected_activity = st.multiselect("Filter Activity:", options=list_activity, default=list_activity)
             df = df[df['WorkActivity'].isin(selected_activity)]
 
         if st.button("🗑️ RESET APLIKASI"):
-            full_reset()
+            st.session_state.reset_key += 1
+            st.rerun()
 
         st.markdown("---")
         
         if not df.empty:
-            # Pastikan kolom tanggal diproses sebagai objek datetime
-            if 'ActualTargetDate' in df.columns:
-                df['ActualTargetDate_DT'] = pd.to_datetime(df['ActualTargetDate'])
-                df['ActualTargetDate_STR'] = df['ActualTargetDate_DT'].dt.strftime('%Y-%m-%d')
-            
+            df['ActualTargetDate_DT'] = pd.to_datetime(df['ActualTargetDate'])
+            df['ActualTargetDate_STR'] = df['ActualTargetDate_DT'].dt.strftime('%Y-%m-%d')
             df = df.sort_values(['EngineerName', 'ActualTargetDate_DT', 'MerchantName'])
             
-            today_dt = datetime.date.today()
             res_txt = ""
-
             for eng, g_eng in df.groupby('EngineerName'):
                 h = str(eng).upper()
                 st.markdown(f"<p class='engineer-header'>{h}</p>", unsafe_allow_html=True)
@@ -120,13 +110,13 @@ if uploaded_files:
                 for dt_str, g_dt in g_eng.groupby('ActualTargetDate_STR'):
                     current_dt = g_dt['ActualTargetDate_DT'].iloc[0].date()
                     
-                    # LOGIKA SIMBOL TANGGAL
-                    if current_dt == today_dt:
+                    # Logika Simbol
+                    if current_dt < now_jkt:
+                        sym = "🔴" # Lewat
+                    elif current_dt == now_jkt:
                         sym = "🗓️" # Hari ini
-                    elif current_dt < today_dt:
-                        sym = "🔴" # Overdue/Lewat
                     else:
-                        sym = "🟡" # Mendatang
+                        sym = "🟡" # Besok/Lusa
                     
                     date_label = f"{sym} {current_dt.strftime('%d-%m-%Y')}"
                     st.markdown(f"<p class='date-header'>{date_label}</p>", unsafe_allow_html=True)
@@ -141,4 +131,4 @@ if uploaded_files:
             st.text_area("📋 Hasil (Siap di-Copy):", value=res_txt, height=200)
 
     except Exception as e:
-        st.error(f"Gagal memproses file.")
+        st.error("Gagal memproses file.")
