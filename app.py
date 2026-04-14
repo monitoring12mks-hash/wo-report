@@ -114,11 +114,11 @@ if uploaded_files:
                     
                     # LOGIKA SIMBOL TANGGAL
                     if current_dt == today_dt:
-                        sym = "🔴" # Hari ini
+                        sym = "🗓️" # Hari ini
                     elif current_dt < today_dt:
-                        sym = "⚠️" # Overdue/Lewat
+                        sym = "🔴" # Overdue/Lewat
                     else:
-                        sym = "📅" # Mendatang
+                        sym = "🟡" # Mendatang
                     
                     date_label = f"{sym} {current_dt.strftime('%d-%m-%Y')}"
                     st.markdown(f"<p class='date-header'>{date_label}</p>", unsafe_allow_html=True)
