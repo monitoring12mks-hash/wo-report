@@ -30,11 +30,19 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 def get_report_urls():
+    # Mengambil tanggal hari ini secara otomatis
     today = datetime.date.today()
-    date_from = today.replace(day=1).strftime("%d-%b-%Y")
+    
+    # Otomatis menetapkan tanggal 1 pada bulan berjalan
+    date_from_obj = today.replace(day=1)
+    
+    # Format ke "dd-mmm-yyyy" (Contoh: 01-Apr-2026) sesuai kebutuhan VCare
+    date_from = date_from_obj.strftime("%d-%b-%Y")
     date_to = today.strftime("%d-%b-%Y")
+    
     enc = lambda s: quote(s)
     base = "https://vcare.visionet.co.id/Report/DownloadReportByStatus"
+    
     return {
         "📥 DOWNLOAD SCHEDULED": f"{base}?DateFrom={enc(date_from)}&DateTo={enc(date_to)}&WorkActivity=Scheduled",
         "📥 DOWNLOAD BOOKED": f"{base}?DateFrom={enc(date_from)}&DateTo={enc(date_to)}&WorkActivity=Booked",
