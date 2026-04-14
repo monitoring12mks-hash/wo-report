@@ -72,7 +72,8 @@ st.markdown("---")
 
 # --- SEKSI 2: PENGOLAHAN DATA ---
 # (Pastikan link Google Sheets Anda sudah benar di bawah ini)
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1mhdwIlP20HmtmlYb0BP-vfH32jiE82m5GGq6_yCaYSk/edit?gid=758149661#gid=758149661"
+# Mengambil URL dari Secrets, bukan ditulis langsung
+GOOGLE_SHEET_URL = st.secrets["GSHEET_URL"]
 
 uploaded_files = st.file_uploader(
     "2. Upload/Pilih file hasil download:", 
