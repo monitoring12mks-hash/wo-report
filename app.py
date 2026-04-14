@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-# 1. SETTING CSS & TAMPILAN
+# 1. SETTING CSS & TAMPILAN (Anti-Dark Mode)
 st.set_page_config(page_title="WO Reporter Pro", layout="centered")
 
 st.markdown("""
@@ -17,15 +17,20 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. FUNGSI AMBIL DATA PEMBANDING DARI GOOGLE SHEETS
-@st.cache_data(ttl=600) # Data disimpan selama 10 menit sebelum refresh otomatis
+# 2. FUNGSI AMBIL DATA DARI GOOGLE SHEETS DENGAN PEMBERSIHAN EXTRA
+@st.cache_data(ttl=300)
 def get_blacklist_data(sheet_url):
-    # Mengubah URL biasa ke URL format ekspor CSV
-    csv_url = sheet_url.replace('/edit?usp=sharing', '/export?format=csv').replace('/edit#gid=', '/export?format=csv&gid=')
     try:
+        # Konversi link ke format ekspor CSV
+        csv_url = sheet_url.replace('/edit?usp=sharing', '/export?format=csv').split('/edit')[0] + '/export?format=csv'
         blacklist_df = pd.read_csv(csv_url)
-        return blacklist_df['TicketNo'].astype(str).unique().tolist()
-    except:
+        
+        # Ambil kolom TicketNo, ubah ke string, hilangkan spasi, dan hapus jika ada yang kosong
+        if 'TicketNo' in blacklist_df.columns:
+            return blacklist_df['TicketNo'].astype(str).str.strip().unique().tolist()
+        return []
+    except Exception as e:
+        st.error(f"Gagal memuat Google Sheets: {e}")
         return []
 
 def reset_app():
@@ -35,10 +40,16 @@ def reset_app():
 
 st.title("📲 Pro WO Reporter")
 
-# GANTI INI dengan Link Google Sheets Anda
+# GANTI INI dengan Link Google Sheets Anda yang sudah "Anyone with the link can view"
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1mhdwIlP20HmtmlYb0BP-vfH32jiE82m5GGq6_yCaYSk/edit?gid=758149661#gid=758149661"
 
 blacklist_tickets = get_blacklist_data(GOOGLE_SHEET_URL)
+
+# Menampilkan indikator jika blacklist berhasil dimuat
+if blacklist_tickets:
+    st.sidebar.success(f"✅ {len(blacklist_tickets)} Tiket Pembanding Aktif")
+else:
+    st.sidebar.warning("⚠️ Data Pembanding Kosong / Link Salah")
 
 uploaded_files = st.file_uploader("Upload file WO History", type=['xlsx', 'csv'], accept_multiple_files=True)
 
@@ -55,14 +66,18 @@ if uploaded_files:
         
         df = pd.concat(all_df, ignore_index=True)
 
-        # FITUR: FILTER DATA PEMBANDING (Berdasarkan Google Sheets)
-        if 'TicketNo' in df.columns and len(blacklist_tickets) > 0:
+        # PROSES FILTERING YANG LEBIH KETAT
+        if 'TicketNo' in df.columns and blacklist_tickets:
+            # Bersihkan data TicketNo di file upload (ubah ke string & buang spasi)
+            df['TicketNo_Clean'] = df['TicketNo'].astype(str).str.strip()
+            
+            # Filter: Hanya simpan yang TIDAK ADA di blacklist
             initial_count = len(df)
-            # Menghapus data yang TicketNo-nya ada di daftar blacklist
-            df = df[~df['TicketNo'].astype(str).isin(blacklist_tickets)]
+            df = df[~df['TicketNo_Clean'].isin(blacklist_tickets)]
+            
             removed_count = initial_count - len(df)
             if removed_count > 0:
-                st.warning(f"ℹ️ {removed_count} data disembunyikan (Cocok dengan data pembanding)")
+                st.warning(f"ℹ️ {removed_count} data disembunyikan karena ada di Data Pembanding.")
 
         # Filter WorkActivity
         if 'WorkActivity' in df.columns:
