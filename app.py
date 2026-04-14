@@ -25,11 +25,10 @@ st.markdown("""
         font-size: 16px; font-weight: bold; margin-bottom: 10px;
         border: none; cursor: pointer; width: 100%;
     }
-    .mega-download-btn:hover { background-color: #b71c1c; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. LOGIKA URL (Script Anda)
+# 2. LOGIKA URL VCARE
 def get_report_urls():
     today = datetime.date.today()
     date_from = today.replace(day=1).strftime("%d-%b-%Y")
@@ -49,49 +48,39 @@ if 'reset_key' not in st.session_state:
 
 st.title("📲 Monitoring WO Real-time")
 
-# --- SEKSI 1: SINGLE DOWNLOAD BUTTON ---
+# --- SEKSI 1: SINGLE DOWNLOAD BUTTON (FIXED FOR MOBILE) ---
 st.subheader("1. Download Semua Data")
 urls = get_report_urls()
 
-# JavaScript untuk mendownload banyak file sekaligus
+# Script baru: Membuka 3 tab sekaligus
+# Browser HP biasanya akan memunculkan popup "Pop-ups blocked" - User harus klik 'Always Allow'
 js_code = f"""
     <script>
     function downloadAll() {{
         const urls = {urls};
-        urls.forEach((url, index) => {{
-            setTimeout(() => {{
-                const link = document.createElement('a');
-                link.href = url;
-                link.target = '_blank';
-                link.download = '';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            }}, index * 1000); // Jeda 1 detik antar download agar tidak diblokir browser
-        }});
+        for (let i = 0; i < urls.length; i++) {{
+            window.open(urls[i], '_blank');
+        }}
     }}
     </script>
-    <button onclick="downloadAll()" class="mega-download-btn">🚀 DOWNLOAD 3 DATA SEKALIGUS</button>
+    <button onclick="downloadAll()" class="mega-download-btn">🚀 KLIK UNTUK DOWNLOAD 3 DATA</button>
 """
 st.markdown(js_code, unsafe_allow_html=True)
-st.caption("⚠️ Jika muncul peringatan 'Allow multiple downloads', klik **Allow/Izinkan**.")
-
-# Tombol Folder (Tetap disediakan untuk akses cepat)
-st.markdown('<a href="file:///C:/Users/User/Downloads" style="text-decoration:none; color:#f57c00; font-size:12px; font-weight:bold;">📂 Buka Folder Downloads (PC)</a>', unsafe_allow_html=True)
+st.caption("⚠️ Jika muncul notif 'Pop-up Blocked' di atas/bawah layar HP, klik **Always Show/Izinkan**.")
 
 st.markdown("---")
 
 # --- SEKSI 2: PENGOLAHAN DATA ---
+# (Pastikan link Google Sheets Anda sudah benar di bawah ini)
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1mhdwIlP20HmtmlYb0BP-vfH32jiE82m5GGq6_yCaYSk/edit?gid=758149661#gid=758149661"
 
 uploaded_files = st.file_uploader(
-    "2. Masukkan File ke sini:", 
+    "2. Upload/Pilih file hasil download:", 
     type=['xlsx', 'csv'], 
     accept_multiple_files=True, 
     key=f"up_{st.session_state.reset_key}"
 )
 
-# (Logika pengolahan data tetap sama seperti sebelumnya...)
 if uploaded_files:
     try:
         dfs = []
@@ -129,7 +118,6 @@ if uploaded_files:
                         res_txt += f"{row_txt}\n"
                 res_txt += "\n"
 
-            st.text_area("📋 Hasil Laporan:", value=res_txt, height=200)
-
-    except Exception as e:
+            st.text_area("📋 Copy Hasil:", value=res_txt, height=200)
+    except:
         st.error("Gagal memproses file.")
