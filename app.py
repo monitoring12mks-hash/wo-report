@@ -3,7 +3,7 @@ import pandas as pd
 import datetime
 from urllib.parse import quote
 
-# 1. SETTING TAMPILAN
+
 st.set_page_config(page_title="WO Reporter Pro", layout="centered")
 
 st.markdown("""
@@ -31,7 +31,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. LOGIKA URL VCARE
+
 def get_report_urls():
     today = datetime.date.today()
     date_from = today.replace(day=1).strftime("%d-%b-%Y")
@@ -51,23 +51,23 @@ def full_reset():
     st.session_state.reset_key += 1
     st.rerun()
 
-# --- UI UTAMA ---
+
 st.title("📲 Monitoring WO Real-time")
 
-# SEKSI 1: DOWNLOAD & CLEANUP
+
 st.subheader("Langkah 1: Ambil Data & Kelola File")
 links = get_report_urls()
 for name, url in links.items():
     st.markdown(f'<a href="{url}" target="_blank" class="download-btn">{name}</a>', unsafe_allow_html=True)
 
-# TOMBOL KE FOLDER DOWNLOAD
+
 # Catatan: Protokol 'file:///' bekerja berbeda-beda tiap OS/Browser
 st.markdown('<a href="file:///C:/Users/User/Downloads" class="folder-btn">📂 BUKA FOLDER DOWNLOAD (PC/LAPTOP)</a>', unsafe_allow_html=True)
 st.caption("Catatan: Jika tombol folder tidak terbuka otomatis (karena proteksi browser), silakan buka folder 'Downloads' manual di HP/PC Anda untuk menghapus file lama.")
 
 st.markdown("---")
 
-# SEKSI 2: UPLOAD & REPORT
+
 st.subheader("Langkah 2: Upload & Gabung")
 GOOGLE_SHEET_URL = st.secrets["GSHEET_URL"]
 
