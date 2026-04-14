@@ -29,7 +29,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. LOGIKA URL
 def get_report_urls():
     today = datetime.date.today()
     date_from = today.replace(day=1).strftime("%d-%b-%Y")
@@ -51,7 +50,6 @@ def full_reset():
 
 st.title("📲 Monitoring WO Real-time")
 
-# LANGKAH 1
 st.subheader("Langkah 1: Ambil Data & Kelola File")
 links = get_report_urls()
 for name, url in links.items():
@@ -61,7 +59,6 @@ st.markdown('<a href="file:///C:/Users/User/Downloads" class="folder-btn">📂 B
 
 st.markdown("---")
 
-# LANGKAH 2
 st.subheader("Langkah 2: Upload & Gabung")
 GOOGLE_SHEET_URL = st.secrets["GSHEET_URL"]
 
@@ -82,11 +79,10 @@ if uploaded_files:
         
         df = pd.concat(dfs, ignore_index=True)
 
-        # --- TAMBAHAN FILTER WORK ACTIVITY ---
         if 'WorkActivity' in df.columns:
             list_activity = sorted(df['WorkActivity'].unique().astype(str))
             selected_activity = st.multiselect(
-                "Filter Work Activity yang ingin ditampilkan:",
+                "Filter Work Activity:",
                 options=list_activity,
                 default=list_activity
             )
@@ -98,20 +94,36 @@ if uploaded_files:
         st.markdown("---")
         
         if not df.empty:
+            # Pastikan kolom tanggal diproses sebagai objek datetime
             if 'ActualTargetDate' in df.columns:
-                df['ActualTargetDate'] = pd.to_datetime(df['ActualTargetDate']).dt.strftime('%Y-%m-%d')
+                df['ActualTargetDate_DT'] = pd.to_datetime(df['ActualTargetDate'])
+                df['ActualTargetDate_STR'] = df['ActualTargetDate_DT'].dt.strftime('%Y-%m-%d')
             
-            df = df.sort_values(['EngineerName', 'ActualTargetDate', 'MerchantName'])
+            df = df.sort_values(['EngineerName', 'ActualTargetDate_DT', 'MerchantName'])
             
+            today_dt = datetime.date.today()
             res_txt = ""
+
             for eng, g_eng in df.groupby('EngineerName'):
                 h = str(eng).upper()
                 st.markdown(f"<p class='engineer-header'>{h}</p>", unsafe_allow_html=True)
                 res_txt += f"*{h}*\n"
-                for dt, g_dt in g_eng.groupby('ActualTargetDate'):
-                    d_l = f"📅 {dt}"
-                    st.markdown(f"<p class='date-header'>{d_l}</p>", unsafe_allow_html=True)
-                    res_txt += f"{d_l}\n"
+                
+                for dt_str, g_dt in g_eng.groupby('ActualTargetDate_STR'):
+                    current_dt = g_dt['ActualTargetDate_DT'].iloc[0].date()
+                    
+                    # LOGIKA SIMBOL TANGGAL
+                    if current_dt == today_dt:
+                        sym = "🔴" # Hari ini
+                    elif current_dt < today_dt:
+                        sym = "⚠️" # Overdue/Lewat
+                    else:
+                        sym = "📅" # Mendatang
+                    
+                    date_label = f"{sym} {current_dt.strftime('%d-%m-%Y')}"
+                    st.markdown(f"<p class='date-header'>{date_label}</p>", unsafe_allow_html=True)
+                    res_txt += f"{date_label}\n"
+                    
                     for _, r in g_dt.iterrows():
                         row_txt = f"• {r['MerchantName']} - {r['WorkActivity']}"
                         st.markdown(f"<p class='item-list'>{row_txt}</p>", unsafe_allow_html=True)
