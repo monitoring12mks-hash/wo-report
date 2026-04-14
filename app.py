@@ -1,127 +1,130 @@
 import streamlit as st
 import pandas as pd
+import datetime
+from urllib.parse import quote
 
-# 1. SETTING CSS & TAMPILAN (Anti-Dark Mode)
+# 1. SETTING TAMPILAN (Tetap Putih & Bersih)
 st.set_page_config(page_title="WO Reporter Pro", layout="centered")
 
 st.markdown("""
     <style>
     .stApp { background-color: white; color: black; }
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
+    [data-testid="stFileUploadDropzone"] { border: 2px dashed #2e7d32; background-color: #f1f8e9; }
+    header, footer {visibility: hidden;}
     p, span, label, div { color: black !important; }
     .engineer-header { font-weight: bold; color: black; margin-top: 15px; text-decoration: underline; font-size: 16px; }
     .date-header { font-weight: bold; color: #333; margin-left: 10px; margin-top: 5px; font-size: 14px; }
     .item-list { margin-left: 25px; color: #444; font-size: 14px; margin-bottom: 2px; }
-    .stButton>button { width: 100%; border-radius: 5px; }
+    .download-btn { 
+        display: block; text-align: center; padding: 10px; background-color: #1565c0; color: white !important; 
+        text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: bold; margin-bottom: 10px;
+    }
+    .delete-info { font-size: 11px; color: #d32f2f !important; font-style: italic; }
     </style>
     """, unsafe_allow_html=True)
 
-# Inisialisasi session state untuk reset
-if 'reset_key' not in st.session_state:
-    st.session_state.reset_key = 0
+# 2. LOGIKA URL (Sesuai Script Anda)
+def get_report_urls():
+    today = datetime.date.today()
+    date_from = today.replace(day=1).strftime("%d-%b-%Y")
+    date_to = today.strftime("%d-%b-%Y")
+    enc = lambda s: quote(s)
+    base = "https://vcare.visionet.co.id/Report/DownloadReportByStatus"
+    return {
+        "1. DOWNLOAD SCHEDULED": f"{base}?DateFrom={enc(date_from)}&DateTo={enc(date_to)}&WorkActivity=Scheduled",
+        "2. DOWNLOAD BOOKED": f"{base}?DateFrom={enc(date_from)}&DateTo={enc(date_to)}&WorkActivity=Booked",
+        "3. DOWNLOAD ON PROGRESS": f"{base}?DateFrom={enc(date_from)}&DateTo={enc(date_to)}&WorkActivity=On%20Progress"
+    }
 
-def reset_app():
-    # Menaikkan nilai key agar uploader ter-reset total
-    st.session_state.reset_key += 1
-    # Hapus data lain di session state jika ada
-    st.rerun()
-
-# 2. FUNGSI AMBIL DATA GOOGLE SHEETS
 @st.cache_data(ttl=300)
 def get_blacklist_data(sheet_url):
     try:
-        if not sheet_url or "google.com" not in sheet_url:
-            return []
         csv_url = sheet_url.replace('/edit?usp=sharing', '/export?format=csv').split('/edit')[0] + '/export?format=csv'
-        blacklist_df = pd.read_csv(csv_url)
-        if 'TicketNo' in blacklist_df.columns:
-            return blacklist_df['TicketNo'].astype(str).str.strip().unique().tolist()
-        return []
-    except:
-        return []
+        df_b = pd.read_csv(csv_url)
+        return df_b['TicketNo'].astype(str).str.strip().unique().tolist() if 'TicketNo' in df_b.columns else []
+    except: return []
 
-st.title("📲 Pro WO Reporter")
+if 'reset_key' not in st.session_state:
+    st.session_state.reset_key = 0
 
-# --- MASUKKAN LINK GOOGLE SHEETS ANDA DI SINI ---
+def full_reset():
+    st.session_state.reset_key += 1
+    st.rerun()
+
+# --- UI UTAMA ---
+st.title("📲 Monitoring WO Per Jam")
+
+# Kolom Download
+st.info("💡 Login VCare dulu di tab sebelah sebelum klik tombol di bawah.")
+links = get_report_urls()
+for name, url in links.items():
+    st.markdown(f'<a href="{url}" target="_blank" class="download-btn">{name}</a>', unsafe_allow_html=True)
+
+st.markdown('<p class="delete-info">⚠️ Ingat: Hapus file di folder Downloads HP Anda secara manual setiap selesai report agar memori tidak penuh.</p>', unsafe_allow_html=True)
+
+st.markdown("---")
+
+# Bagian Pengolahan
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1mhdwIlP20HmtmlYb0BP-vfH32jiE82m5GGq6_yCaYSk/edit?gid=758149661#gid=758149661"
+blacklist = get_blacklist_data(GOOGLE_SHEET_URL)
 
-blacklist_tickets = get_blacklist_data(GOOGLE_SHEET_URL)
-
-# File Uploader dengan Key Dinamis (Solusi Tombol Reset)
 uploaded_files = st.file_uploader(
-    "Upload file WO History", 
+    "📥 Tempel/Upload file di sini:", 
     type=['xlsx', 'csv'], 
     accept_multiple_files=True, 
-    key=f"uploader_{st.session_state.reset_key}"
+    key=f"up_{st.session_state.reset_key}"
 )
 
 if uploaded_files:
     try:
-        all_df = []
-        for uploaded_file in uploaded_files:
-            if uploaded_file.name.endswith('.csv'):
-                temp_df = pd.read_csv(uploaded_file)
-            else:
-                temp_df = pd.read_excel(uploaded_file, engine='openpyxl')
-            temp_df.columns = [c.strip() for c in temp_df.columns]
-            all_df.append(temp_df)
+        dfs = []
+        for f in uploaded_files:
+            df_temp = pd.read_csv(f) if f.name.endswith('.csv') else pd.read_excel(f, engine='openpyxl')
+            df_temp.columns = [c.strip() for c in df_temp.columns]
+            dfs.append(df_temp)
         
-        df = pd.concat(all_df, ignore_index=True)
+        df = pd.concat(dfs, ignore_index=True)
 
-        # FILTER DATA PEMBANDING (TicketNo)
-        if 'TicketNo' in df.columns and blacklist_tickets:
-            df['TicketNo_Str'] = df['TicketNo'].astype(str).str.strip()
-            initial_count = len(df)
-            # Menghilangkan data yang ada di blacklist
-            df = df[~df['TicketNo_Str'].isin(blacklist_tickets)]
-            removed = initial_count - len(df)
-            if removed > 0:
-                st.sidebar.info(f"🚫 {removed} Tiket Pembanding disembunyikan")
+        # Filter Blacklist
+        if 'TicketNo' in df.columns and blacklist:
+            df = df[~df['TicketNo'].astype(str).str.strip().isin(blacklist)]
 
-        # FILTER WORK ACTIVITY
+        # Filter Activity Manual
         if 'WorkActivity' in df.columns:
-            all_activities = sorted(df['WorkActivity'].unique().astype(str))
-            selected_activities = st.multiselect("Pilih WorkActivity:", options=all_activities, default=all_activities)
-            df = df[df['WorkActivity'].isin(selected_activities)]
+            acts = sorted(df['WorkActivity'].unique().astype(str))
+            sel_acts = st.multiselect("Filter Tampilan:", acts, default=acts)
+            df = df[df['WorkActivity'].isin(sel_acts)]
 
-        # TOMBOL RESET (DIPERBAIKI)
-        if st.button("🔄 MULAI DARI AWAL"):
-            reset_app()
+        # Tombol Reset UI
+        if st.button("🗑️ BERSIHKAN LAYAR & MULAI ULANG"):
+            full_reset()
 
         st.markdown("---")
 
         if not df.empty:
-            date_col = 'ActualTargetDate'
-            if date_col in df.columns:
-                df[date_col] = pd.to_datetime(df[date_col]).dt.strftime('%Y-%m-%d')
+            if 'ActualTargetDate' in df.columns:
+                df['ActualTargetDate'] = pd.to_datetime(df['ActualTargetDate']).dt.strftime('%Y-%m-%d')
 
             df = df.sort_values(['EngineerName', 'ActualTargetDate', 'MerchantName'])
 
-            full_text_report = ""
-            for eng, eng_group in df.groupby('EngineerName'):
-                header = f"{str(eng).upper()}"
-                st.markdown(f"<p class='engineer-header'>{header}</p>", unsafe_allow_html=True)
-                full_text_report += f"*{header}*\n"
+            res_txt = ""
+            for eng, g_eng in df.groupby('EngineerName'):
+                h = str(eng).upper()
+                st.markdown(f"<p class='engineer-header'>{h}</p>", unsafe_allow_html=True)
+                res_txt += f"*{h}*\n"
                 
-                for dt, dt_group in eng_group.groupby('ActualTargetDate'):
-                    date_line = f"📅 {dt}"
-                    st.markdown(f"<p class='date-header'>{date_line}</p>", unsafe_allow_html=True)
-                    full_text_report += f"{date_line}\n"
+                for dt, g_dt in g_eng.groupby('ActualTargetDate'):
+                    d_l = f"📅 {dt}"
+                    st.markdown(f"<p class='date-header'>{d_l}</p>", unsafe_allow_html=True)
+                    res_txt += f"{d_l}\n"
                     
-                    for _, row in dt_group.iterrows():
-                        item = f"• {row['MerchantName']} - {row['WorkActivity']}"
-                        st.markdown(f"<p class='item-list'>{item}</p>", unsafe_allow_html=True)
-                        full_text_report += f"{item}\n"
-                full_text_report += "\n"
+                    for _, r in g_dt.iterrows():
+                        row_txt = f"• {r['MerchantName']} - {r['WorkActivity']}"
+                        st.markdown(f"<p class='item-list'>{row_txt}</p>", unsafe_allow_html=True)
+                        res_txt += f"{row_txt}\n"
+                res_txt += "\n"
 
-            st.markdown("---")
-            st.text_area("Copy Teks Laporan:", value=full_text_report, height=250)
-        else:
-            st.warning("Data kosong setelah difilter.")
+            st.text_area("📋 Copy untuk WhatsApp:", value=res_txt, height=200)
             
     except Exception as e:
-        st.error(f"Error: {e}")
-        if st.button("Reset Sistem"):
-            reset_app()
+        st.error(f"Gagal memproses file. Pastikan format benar.")
