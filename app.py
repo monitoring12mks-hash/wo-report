@@ -5,7 +5,7 @@ import pytz
 from urllib.parse import quote
 
 # 1. SETTING TAMPILAN
-st.set_page_config(page_title="WO Reporter Pro", layout="centered")
+st.set_page_config(page_title="WO Reporter SLA Pro", layout="centered")
 
 st.markdown("""
     <style>
@@ -17,6 +17,7 @@ st.markdown("""
     .engineer-header { font-weight: bold; color: black; margin-top: 15px; text-decoration: underline; font-size: 16px; }
     .date-header { font-weight: bold; color: #333; margin-left: 10px; margin-top: 5px; font-size: 14px; }
     .item-list { margin-left: 25px; color: #444; font-size: 14px; margin-bottom: 2px; }
+    .sla-tag { color: #d32f2f; font-weight: bold; } /* Warna merah untuk jam SLA */
     
     .download-btn { 
         display: block; text-align: center; padding: 10px; background-color: #2e7d32; color: white !important; 
@@ -27,34 +28,32 @@ st.markdown("""
 
 # --- LOGIKA ZONA WAKTU ---
 tz_jkt = pytz.timezone('Asia/Jakarta')
-now_jkt = datetime.datetime.now(tz_jkt).date()
+now_jkt = datetime.datetime.now(tz_jkt)
+today_date = now_jkt.date()
 
-st.title("📲 Monitoring WO Real-time")
+st.title("📲 Monitoring WO & SLA Real-time")
 
-# --- SEKSI PILIH TANGGAL (RANGE) ---
-st.subheader("Pilih Rentang Tanggal Download")
+# --- SEKSI PILIH TANGGAL ---
+st.subheader("Rentang Tanggal SLA")
 col1, col2 = st.columns(2)
-
 with col1:
-    start_date = st.date_input("Dari Tanggal:", now_jkt.replace(day=1))
+    start_date = st.date_input("Dari:", today_date.replace(day=1))
 with col2:
-    end_date = st.date_input("Sampai Tanggal:", now_jkt)
+    end_date = st.date_input("Sampai:", today_date)
 
 def get_report_urls(d_from, d_to):
-    # Format sesuai kebutuhan VCare (01-Apr-2026)
     f_from = d_from.strftime("%d-%b-%Y")
     f_to = d_to.strftime("%d-%b-%Y")
     enc = lambda s: quote(s)
     base = "https://vcare.visionet.co.id/Report/DownloadReportByStatus"
     
     return {
-        f"📥 DOWNLOAD SCHEDULED ({f_to})": f"{base}?DateFrom={enc(f_from)}&DateTo={enc(f_to)}&WorkActivity=Scheduled",
-        f"📥 DOWNLOAD BOOKED ({f_to})": f"{base}?DateFrom={enc(f_from)}&DateTo={enc(f_to)}&WorkActivity=Booked",
-        f"📥 DOWNLOAD ON PROGRESS ({f_to})": f"{base}?DateFrom={enc(f_from)}&DateTo={enc(date_to if 'date_to' in locals() else f_to)}&WorkActivity=On%20Progress"
+        f"📥 DOWNLOAD SCHEDULED": f"{base}?DateFrom={enc(f_from)}&DateTo={enc(f_to)}&WorkActivity=Scheduled",
+        f"📥 DOWNLOAD BOOKED": f"{base}?DateFrom={enc(f_from)}&DateTo={enc(f_to)}&WorkActivity=Booked",
+        f"📥 DOWNLOAD ON PROGRESS": f"{base}?DateFrom={enc(f_from)}&DateTo={enc(f_to)}&WorkActivity=On%20Progress"
     }
 
 # --- LANGKAH 1 ---
-st.subheader("Langkah 1: Download Data")
 links = get_report_urls(start_date, end_date)
 for name, url in links.items():
     st.markdown(f'<a href="{url}" target="_blank" class="download-btn">{name}</a>', unsafe_allow_html=True)
@@ -62,17 +61,10 @@ for name, url in links.items():
 st.markdown("---")
 
 # --- LANGKAH 2 ---
-st.subheader("Langkah 2: Upload & Gabung")
-
 if 'reset_key' not in st.session_state:
     st.session_state.reset_key = 0
 
-uploaded_files = st.file_uploader(
-    "Tarik file ke sini:", 
-    type=['xlsx', 'csv'], 
-    accept_multiple_files=True, 
-    key=f"up_{st.session_state.reset_key}"
-)
+uploaded_files = st.file_uploader("Upload file WO:", type=['xlsx', 'csv'], accept_multiple_files=True, key=f"up_{st.session_state.reset_key}")
 
 if uploaded_files:
     try:
@@ -84,7 +76,6 @@ if uploaded_files:
         
         df = pd.concat(dfs, ignore_index=True)
 
-        # Filter Work Activity
         if 'WorkActivity' in df.columns:
             list_activity = sorted(df['WorkActivity'].unique().astype(str))
             selected_activity = st.multiselect("Filter Activity:", options=list_activity, default=list_activity)
@@ -97,8 +88,10 @@ if uploaded_files:
         st.markdown("---")
         
         if not df.empty:
+            # 1. KONVERSI KE DATETIME LENGKAP (TANGGAL + JAM)
             df['ActualTargetDate_DT'] = pd.to_datetime(df['ActualTargetDate'])
-            df['ActualTargetDate_STR'] = df['ActualTargetDate_DT'].dt.strftime('%Y-%m-%d')
+            
+            # 2. SORTING BERDASARKAN WAKTU (Tiket paling awal muncul pertama)
             df = df.sort_values(['EngineerName', 'ActualTargetDate_DT', 'MerchantName'])
             
             res_txt = ""
@@ -107,28 +100,34 @@ if uploaded_files:
                 st.markdown(f"<p class='engineer-header'>{h}</p>", unsafe_allow_html=True)
                 res_txt += f"*{h}*\n"
                 
-                for dt_str, g_dt in g_eng.groupby('ActualTargetDate_STR'):
-                    current_dt = g_dt['ActualTargetDate_DT'].iloc[0].date()
+                # Grouping per tanggal (tanpa jam untuk header tanggal)
+                g_eng['Date_Only'] = g_eng['ActualTargetDate_DT'].dt.date
+                for date_only, g_dt in g_eng.groupby('Date_Only'):
                     
-                    # Logika Simbol
-                    if current_dt < now_jkt:
-                        sym = "🔴" # Lewat
-                    elif current_dt == now_jkt:
-                        sym = "🗓️" # Hari ini
+                    # Logika Simbol Tanggal
+                    if date_only < today_date:
+                        sym = "🔴"
+                    elif date_only == today_date:
+                        sym = "🗓️"
                     else:
-                        sym = "🟡" # Besok/Lusa
+                        sym = "🟡"
                     
-                    date_label = f"{sym} {current_dt.strftime('%d-%m-%Y')}"
-                    st.markdown(f"<p class='date-header'>{date_label}</p>", unsafe_allow_html=True)
-                    res_txt += f"{date_label}\n"
+                    date_header_str = f"{sym} {date_only.strftime('%d-%m-%Y')}"
+                    st.markdown(f"<p class='date-header'>{date_header_str}</p>", unsafe_allow_html=True)
+                    res_txt += f"{date_header_str}\n"
                     
                     for _, r in g_dt.iterrows():
-                        row_txt = f"• {r['MerchantName']} - {r['WorkActivity']}"
-                        st.markdown(f"<p class='item-list'>{row_txt}</p>", unsafe_allow_html=True)
-                        res_txt += f"{row_txt}\n"
+                        # 3. AMBIL JAM SLA (HH:mm)
+                        jam_sla = r['ActualTargetDate_DT'].strftime('%H:%M')
+                        
+                        row_display = f"• {r['MerchantName']} - {r['WorkActivity']} [<span class='sla-tag'>{jam_sla}</span>]"
+                        row_wa = f"• {r['MerchantName']} - {r['WorkActivity']} ({jam_sla})"
+                        
+                        st.markdown(f"<p class='item-list'>{row_display}</p>", unsafe_allow_html=True)
+                        res_txt += f"{row_wa}\n"
                 res_txt += "\n"
 
-            st.text_area("📋 Hasil (Siap di-Copy):", value=res_txt, height=200)
+            st.text_area("📋 Hasil Rekap (SLA Presisi):", value=res_txt, height=250)
 
     except Exception as e:
-        st.error("Gagal memproses file.")
+        st.error(f"Gagal memproses file: {str(e)}")
