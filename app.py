@@ -5,7 +5,7 @@ import pytz
 from urllib.parse import quote
 
 # 1. SETTING TAMPILAN
-st.set_page_config(page_title="WO Multi-Device SLA", layout="centered")
+st.set_page_config(page_title="WO Reporter SLA", layout="centered")
 
 st.markdown("""
     <style>
@@ -14,11 +14,12 @@ st.markdown("""
     [data-testid="stFileUploadDropzone"] { border: 2px dashed #1565c0; background-color: #f0f7ff; }
     p, span, label, div { color: black !important; }
     
-    /* Tombol Mobile */
-    .btn-mobile { 
+    /* Style Tombol Download Satuan */
+    .btn-download { 
         display: block; text-align: center; padding: 12px; background-color: #2e7d32; color: white !important; 
-        text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: bold; margin-bottom: 8px;
+        text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: bold; margin-bottom: 10px;
     }
+    .btn-download:hover { background-color: #1b5e20; }
     
     /* Style untuk Laporan */
     .engineer-header { font-weight: bold; color: black; margin-top: 15px; text-decoration: underline; font-size: 16px; }
@@ -26,15 +27,14 @@ st.markdown("""
     .item-list { margin-left: 25px; color: #444; font-size: 14px; margin-bottom: 2px; }
     .sla-tag { color: #d32f2f; font-weight: bold; }
     
-    /* PC Notice Box */
-    .pc-box {
+    .info-box {
         background-color: #e3f2fd; border-left: 5px solid #1565c0;
-        padding: 15px; border-radius: 5px; margin-bottom: 20px;
+        padding: 15px; border-radius: 5px; margin-bottom: 20px; font-size: 14px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- LOGIKA ZONA WAKTU INDONESIA ---
+# --- LOGIKA ZONA WAKTU ---
 tz_jkt = pytz.timezone('Asia/Jakarta')
 now_jkt = datetime.datetime.now(tz_jkt)
 today_date = now_jkt.date()
@@ -42,11 +42,12 @@ today_date = now_jkt.date()
 st.title("📲 Monitoring WO Real-time")
 
 # --- SWITCHER MODE ---
+# Meskipun fungsinya sekarang sama (satuan), switcher tetap ada jika Anda ingin membedakan instruksi visual
 mode = st.radio("Pilih Mode Perangkat:", ["📱 Mobile", "💻 PC / Laptop"], horizontal=True)
 
 st.markdown("---")
 
-# --- RENTANG TANGGAL (OTOMATIS TANGGAL 1 S/D HARI INI) ---
+# --- RENTANG TANGGAL ---
 col1, col2 = st.columns(2)
 with col1:
     start_date = st.date_input("Dari:", today_date.replace(day=1))
@@ -66,40 +67,25 @@ def get_links(d_from, d_to):
 
 links = get_links(start_date, end_date)
 
-# --- PERLAKUAN BERBEDA UNTUK PC ---
+# --- SEKSI DOWNLOAD (SATU PER SATU) ---
+st.subheader("Langkah 1: Download File (Satu per Satu)")
+
 if mode == "💻 PC / Laptop":
-    st.markdown(f"""
-        <div class="pc-box">
-            <b>💻 PC MODE AKTIF</b><br>
-            1. Gunakan tombol di bawah untuk download semua status sekaligus.<br>
-            2. <b>Tips Folder:</b> Buka Settings Chrome > Downloads > Ganti 'Location' ke folder kerja Anda agar file tidak berantakan.
+    st.markdown("""
+        <div class="info-box">
+            <b>Tips PC Mode:</b><br>
+            Klik tombol di bawah satu per satu. Browser akan menanyakan lokasi penyimpanan jika Anda mengaktifkan 
+            <i>"Ask where to save each file"</i> di pengaturan browser.
         </div>
     """, unsafe_allow_html=True)
-    
-    # JavaScript untuk Download Sekaligus di PC
-    js_download = f"""
-        <script>
-        function downloadAll() {{
-            const urls = {list(links.values())};
-            urls.forEach(url => window.open(url, '_blank'));
-        }}
-        </script>
-        <button onclick="downloadAll()" style="width:100%; padding:15px; background-color:#1565c0; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer; font-size:16px;">
-            📥 DOWNLOAD 3 STATUS SEKALIGUS
-        </button>
-    """
-    st.components.v1.html(js_download, height=70)
-    st.caption("⚠️ Izinkan 'Pop-up' di browser Anda agar 3 file dapat terdownload otomatis.")
 
-else:
-    # MODE MOBILE (TETAP SEPERTI AWAL)
-    st.subheader("Langkah 1: Download File")
-    for name, url in links.items():
-        st.markdown(f'<a href="{url}" target="_blank" class="btn-mobile">📥 DOWNLOAD {name.upper()}</a>', unsafe_allow_html=True)
+# Menampilkan tombol download satu per satu untuk semua mode
+for name, url in links.items():
+    st.markdown(f'<a href="{url}" target="_blank" class="btn-download">📥 DOWNLOAD {name.upper()}</a>', unsafe_allow_html=True)
 
 st.markdown("---")
 
-# --- LANGKAH 2: UPLOAD & REKAP (SAMA UNTUK KEDUA MODE) ---
+# --- LANGKAH 2: UPLOAD & REKAP ---
 if 'reset_key' not in st.session_state:
     st.session_state.reset_key = 0
 
@@ -125,11 +111,11 @@ if uploaded_files:
             st.rerun()
 
         if not df.empty:
+            # Pastikan kolom tanggal menyertakan jam untuk SLA
             df['ActualTargetDate_DT'] = pd.to_datetime(df['ActualTargetDate'])
             df = df.sort_values(['EngineerName', 'ActualTargetDate_DT', 'MerchantName'])
             
             res_txt = ""
-            # Mapping Hari
             nama_hari = {"Monday": "Senin", "Tuesday": "Selasa", "Wednesday": "Rabu", "Thursday": "Kamis", "Friday": "Jumat", "Saturday": "Sabtu", "Sunday": "Minggu"}
 
             for eng, g_eng in df.groupby('EngineerName'):
@@ -152,14 +138,14 @@ if uploaded_files:
                     
                     for _, r in g_dt.iterrows():
                         jam = r['ActualTargetDate_DT'].strftime('%H:%M')
-                        row_display = f"• {r['MerchantName']} - {r['WorkActivity']} [<span class='sla-tag'>{jam}</span>]"
-                        row_wa = f"• {r['MerchantName']} - {r['WorkActivity']} ({jam})"
+                        line_display = f"• {r['MerchantName']} - {r['WorkActivity']} [<span class='sla-tag'>{jam}</span>]"
+                        line_wa = f"• {r['MerchantName']} - {r['WorkActivity']} ({jam})"
                         
-                        st.markdown(f"<p class='item-list'>{row_display}</p>", unsafe_allow_html=True)
-                        res_txt += f"{row_wa}\n"
+                        st.markdown(f"<p class='item-list'>{line_display}</p>", unsafe_allow_html=True)
+                        res_txt += f"{line_wa}\n"
                 res_txt += "\n"
 
             st.text_area("📋 Hasil (Siap di-Copy):", value=res_txt, height=250)
 
     except Exception as e:
-        st.error("Gagal memproses file.")
+        st.error(f"Gagal memproses file: {e}")
