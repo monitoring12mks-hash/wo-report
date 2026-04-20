@@ -139,7 +139,7 @@ if uploaded_files:
             st.session_state.reset_key += 1
             st.rerun()
 
-        # E. GENERATE LAPORAN
+       # E. GENERATE LAPORAN
         if not df.empty:
             # Konversi Tanggal & Jam
             df['ActualTargetDate_DT'] = pd.to_datetime(df['ActualTargetDate'])
@@ -156,26 +156,40 @@ if uploaded_files:
                 g_eng['Date_Only'] = g_eng['ActualTargetDate_DT'].dt.date
                 for date_only, g_dt in g_eng.groupby('Date_Only'):
                     # Simbol Berdasarkan Tanggal
-                    if date_only < today_date: sym = "🔴"
-                    elif date_only == today_date: sym = "🗓️"
-                    else: sym = "🟡"
+                    if date_only < today_date: sym_tgl = "🔴"
+                    elif date_only == today_date: sym_tgl = "🗓️"
+                    else: sym_tgl = "🟡"
                     
                     h_indo = nama_hari.get(date_only.strftime('%A'))
-                    dt_header = f"{sym} {h_indo}, {date_only.strftime('%d-%m-%Y')}"
+                    dt_header = f"{sym_tgl} {h_indo}, {date_only.strftime('%d-%m-%Y')}"
                     
                     st.markdown(f"<p class='date-header'>{dt_header}</p>", unsafe_allow_html=True)
                     res_txt += f"{dt_header}\n"
                     
                     for _, r in g_dt.iterrows():
+                        target_dt = r['ActualTargetDate_DT'].replace(tzinfo=tz_jkt)
+                        selisih = (target_dt - now_jkt).total_seconds() / 3600 # Selisih dalam Jam
+                        
+                        # LOGIKA WARNA STATUS SLA
+                        if selisih <= 0:
+                            status_color = "#d32f2f" # Merah (Lewat/Sama)
+                            sym_status = "❌"
+                        elif selisih <= 2:
+                            status_color = "#fbc02d" # Kuning (Warning < 2 jam)
+                            sym_status = "⚠️"
+                        else:
+                            status_color = "#2e7d32" # Hijau (Aman)
+                            sym_status = "✅"
+                        
                         jam = r['ActualTargetDate_DT'].strftime('%H:%M')
-                        display = f"• {r['MerchantName']} - {r['WorkActivity']} [<span class='sla-tag'>{jam}</span>]"
-                        wa_text = f"• {r['MerchantName']} - {r['WorkActivity']} ({jam})"
+                        
+                        # Tampilan di Web dengan warna dinamis
+                        display = f"• {r['MerchantName']} - {r['WorkActivity']} <span style='color:{status_color}; font-weight:bold;'>[{jam}]</span>"
+                        # Tampilan untuk WA dengan simbol status
+                        wa_text = f"• {r['MerchantName']} - {r['WorkActivity']} ({jam}) {sym_status}"
                         
                         st.markdown(f"<p class='item-list'>{display}</p>", unsafe_allow_html=True)
                         res_txt += f"{wa_text}\n"
                 res_txt += "\n"
 
             st.text_area("📋 Copy Rekap WhatsApp:", value=res_txt, height=250)
-
-    except Exception as e:
-        st.error(f"Gagal memproses: {e}")
