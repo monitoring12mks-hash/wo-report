@@ -23,7 +23,6 @@ st.markdown("""
     .engineer-header { font-weight: bold; color: black; margin-top: 15px; text-decoration: underline; font-size: 16px; }
     .date-header { font-weight: bold; color: #333; margin-left: 10px; margin-top: 5px; font-size: 14px; }
     .item-list { margin-left: 25px; color: #444; font-size: 14px; margin-bottom: 2px; }
-    .sla-tag { color: #d32f2f; font-weight: bold; }
     
     .info-box {
         background-color: #e3f2fd; border-left: 5px solid #1565c0;
@@ -59,12 +58,10 @@ def get_links(d_from, d_to):
 # --- UI UTAMA ---
 st.title("📲 WO Monitoring & SLA")
 
-# SWITCHER MODE
 device_mode = st.radio("Pilih Mode Perangkat:", ["📱 Mobile", "💻 PC / Laptop"], horizontal=True)
 
 st.markdown("---")
 
-# PILIH TANGGAL
 col1, col2 = st.columns(2)
 with col1:
     start_date = st.date_input("Dari Tanggal:", today_date.replace(day=1))
@@ -73,15 +70,9 @@ with col2:
 
 links = get_links(start_date, end_date)
 
-# SEKSI DOWNLOAD
 st.subheader("Langkah 1: Download Data")
 if device_mode == "💻 PC / Laptop":
-    st.markdown("""
-        <div class="info-box">
-            <b>💻 MODE PC AKTIF</b><br>
-            Klik tombol satu per satu. Jika browser bertanya lokasi penyimpanan, arahkan ke folder kerja Anda.
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="info-box"><b>💻 MODE PC AKTIF</b><br>Klik tombol satu per satu dan tentukan folder penyimpanan Anda.</div>', unsafe_allow_html=True)
 
 for name, url in links.items():
     st.markdown(f'<a href="{url}" target="_blank" class="btn-download">📥 DOWNLOAD {name.upper()}</a>', unsafe_allow_html=True)
@@ -94,25 +85,24 @@ st.subheader("Langkah 2: Upload & Rekap")
 if 'reset_key' not in st.session_state:
     st.session_state.reset_key = 0
 
-uploaded_files = st.file_uploader("Upload file Excel/CSV dari VCare:", type=['xlsx', 'csv'], accept_multiple_files=True, key=f"up_{st.session_state.reset_key}")
+uploaded_files = st.file_uploader("Upload file Excel/CSV:", type=['xlsx', 'csv'], accept_multiple_files=True, key=f"up_{st.session_state.reset_key}")
 
 if uploaded_files:
     try:
-        # A. LOAD DATA PEMBANDING (BLACKLIST)
+        # A. LOAD BLACKLIST
         @st.cache_data(ttl=300)
         def get_blacklist():
             try:
-                # Mengubah URL Gsheet menjadi format CSV ekspor
                 sheet_id = GOOGLE_SHEET_URL.split("/d/")[1].split("/")[0]
                 csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
-                db_blacklist = pd.read_csv(csv_url)
-                return db_blacklist['TicketNo'].astype(str).str.strip().unique().tolist()
+                db = pd.read_csv(csv_url)
+                return db['TicketNo'].astype(str).str.strip().unique().tolist()
             except:
                 return []
 
         blacklist_tickets = get_blacklist()
 
-        # B. GABUNGKAN FILE UPLOAD
+        # B. GABUNG FILE
         dfs = []
         for f in uploaded_files:
             temp = pd.read_csv(f) if f.name.endswith('.csv') else pd.read_excel(f, engine='openpyxl')
@@ -121,15 +111,15 @@ if uploaded_files:
         
         df = pd.concat(dfs, ignore_index=True)
 
-        # C. FILTER DATA PEMBANDING (TICKET NO)
+        # C. FILTER BLACKLIST
         if not df.empty and 'TicketNo' in df.columns:
             initial_len = len(df)
             df = df[~df['TicketNo'].astype(str).str.strip().isin(blacklist_tickets)]
             removed = initial_len - len(df)
             if removed > 0:
-                st.info(f"⚡ {removed} Tiket otomatis disaring (Data Pembanding Aktif)")
+                st.info(f"⚡ {removed} Tiket otomatis disaring.")
 
-        # D. FILTER WORK ACTIVITY
+        # D. FILTER ACTIVITY
         if 'WorkActivity' in df.columns:
             list_act = sorted(df['WorkActivity'].unique().astype(str))
             sel_act = st.multiselect("Filter Status:", list_act, default=list_act)
@@ -139,9 +129,8 @@ if uploaded_files:
             st.session_state.reset_key += 1
             st.rerun()
 
-       # E. GENERATE LAPORAN
+        # E. GENERATE LAPORAN DENGAN WARNA SLA
         if not df.empty:
-            # Konversi Tanggal & Jam
             df['ActualTargetDate_DT'] = pd.to_datetime(df['ActualTargetDate'])
             df = df.sort_values(['EngineerName', 'ActualTargetDate_DT', 'MerchantName'])
             
@@ -155,11 +144,7 @@ if uploaded_files:
                 
                 g_eng['Date_Only'] = g_eng['ActualTargetDate_DT'].dt.date
                 for date_only, g_dt in g_eng.groupby('Date_Only'):
-                    # Simbol Berdasarkan Tanggal
-                    if date_only < today_date: sym_tgl = "🔴"
-                    elif date_only == today_date: sym_tgl = "🗓️"
-                    else: sym_tgl = "🟡"
-                    
+                    sym_tgl = "🔴" if date_only < today_date else ("🗓️" if date_only == today_date else "🟡")
                     h_indo = nama_hari.get(date_only.strftime('%A'))
                     dt_header = f"{sym_tgl} {h_indo}, {date_only.strftime('%d-%m-%Y')}"
                     
@@ -167,25 +152,19 @@ if uploaded_files:
                     res_txt += f"{dt_header}\n"
                     
                     for _, r in g_dt.iterrows():
+                        # Hitung Selisih Jam untuk SLA
                         target_dt = r['ActualTargetDate_DT'].replace(tzinfo=tz_jkt)
-                        selisih = (target_dt - now_jkt).total_seconds() / 3600 # Selisih dalam Jam
+                        selisih = (target_dt - now_jkt).total_seconds() / 3600
                         
-                        # LOGIKA WARNA STATUS SLA
                         if selisih <= 0:
-                            status_color = "#d32f2f" # Merah (Lewat/Sama)
-                            sym_status = "❌"
+                            color, sym_status = "#d32f2f", "❌" # Merah
                         elif selisih <= 2:
-                            status_color = "#fbc02d" # Kuning (Warning < 2 jam)
-                            sym_status = "⚠️"
+                            color, sym_status = "#fbc02d", "⚠️" # Kuning
                         else:
-                            status_color = "#2e7d32" # Hijau (Aman)
-                            sym_status = "✅"
+                            color, sym_status = "#2e7d32", "✅" # Hijau
                         
                         jam = r['ActualTargetDate_DT'].strftime('%H:%M')
-                        
-                        # Tampilan di Web dengan warna dinamis
-                        display = f"• {r['MerchantName']} - {r['WorkActivity']} <span style='color:{status_color}; font-weight:bold;'>[{jam}]</span>"
-                        # Tampilan untuk WA dengan simbol status
+                        display = f"• {r['MerchantName']} - {r['WorkActivity']} <span style='color:{color}; font-weight:bold;'>[{jam}]</span>"
                         wa_text = f"• {r['MerchantName']} - {r['WorkActivity']} ({jam}) {sym_status}"
                         
                         st.markdown(f"<p class='item-list'>{display}</p>", unsafe_allow_html=True)
@@ -193,3 +172,6 @@ if uploaded_files:
                 res_txt += "\n"
 
             st.text_area("📋 Copy Rekap WhatsApp:", value=res_txt, height=250)
+
+    except Exception as e:
+        st.error(f"Terjadi kesalahan: {e}")
