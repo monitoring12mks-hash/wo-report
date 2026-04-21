@@ -108,8 +108,10 @@ if uploaded_files:
             temp = pd.read_csv(f) if f.name.endswith('.csv') else pd.read_excel(f, engine='openpyxl')
             temp.columns = [c.strip() for c in temp.columns]
             dfs.append(temp)
-        
+
         df = pd.concat(dfs, ignore_index=True)
+        df['EngineerName'] = df['EngineerName'].fillna("BELUM DI-ASSIGN")
+        df['ActualTargetDate'] = df['ActualTargetDate'].fillna(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
         # C. FILTER BLACKLIST
         if not df.empty and 'TicketNo' in df.columns:
