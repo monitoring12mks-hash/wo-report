@@ -9,17 +9,27 @@ st.set_page_config(page_title="WO Reporter SLA Pro", layout="centered")
 
 st.markdown("""
     <style>
-    /* Menyembunyikan elemen dekorasi Streamlit */
-    .stApp { background-color: white; color: black; }
+    /* 1. Menghilangkan Header, Footer, dan Menu Hamburger */
     header {visibility: hidden;}
     footer {visibility: hidden;}
     #MainMenu {visibility: hidden;}
     .stDeployButton {display:none;}
+
+    /* 2. Menghilangkan tombol 'Manage app' secara paksa */
+    /* Target berdasarkan posisi dan elemen fungsional Streamlit Cloud */
+    [data-testid="manage-app-button"], 
+    .stApp > div:last-child > div:last-child {
+        display: none !important;
+        visibility: hidden !important;
+    }
     
-    /* Menghilangkan tombol 'Manage app' dan elemen status di bagian bawah */
-    [data-testid="manage-app-button"] {display: none;}
-    [data-testid="stStatusWidget"] {visibility: hidden;}
-    
+    /* 3. Menghilangkan elemen status/viewer di pojok kanan bawah */
+    [data-testid="stStatusWidget"] {
+        display: none !important;
+    }
+
+    /* Styling Standar Aplikasi */
+    .stApp { background-color: white; color: black; }
     [data-testid="stFileUploadDropzone"] { border: 2px dashed #1565c0; background-color: #f0f7ff; }
     p, span, label, div { color: black !important; }
     
