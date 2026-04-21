@@ -129,7 +129,7 @@ if uploaded_files:
             st.session_state.reset_key += 1
             st.rerun()
 
-        # E. GENERATE LAPORAN DENGAN WARNA SLA
+        # E. GENERATE LAPORAN
         if not df.empty:
             df['ActualTargetDate_DT'] = pd.to_datetime(df['ActualTargetDate'])
             df = df.sort_values(['EngineerName', 'ActualTargetDate_DT', 'MerchantName'])
@@ -152,16 +152,15 @@ if uploaded_files:
                     res_txt += f"{dt_header}\n"
                     
                     for _, r in g_dt.iterrows():
-                        # Hitung Selisih Jam untuk SLA
                         target_dt = r['ActualTargetDate_DT'].replace(tzinfo=tz_jkt)
                         selisih = (target_dt - now_jkt).total_seconds() / 3600
                         
                         if selisih <= 0:
-                            color, sym_status = "#d32f2f", "❌" # Merah
+                            color, sym_status = "#d32f2f", "❌"
                         elif selisih <= 2:
-                            color, sym_status = "#fbc02d", "⚠️" # Kuning
+                            color, sym_status = "#fbc02d", "⚠️"
                         else:
-                            color, sym_status = "#2e7d32", "✅" # Hijau
+                            color, sym_status = "#2e7d32", "✅"
                         
                         jam = r['ActualTargetDate_DT'].strftime('%H:%M')
                         display = f"• {r['MerchantName']} - {r['WorkActivity']} <span style='color:{color}; font-weight:bold;'>[{jam}]</span>"
@@ -171,28 +170,21 @@ if uploaded_files:
                         res_txt += f"{wa_text}\n"
                 res_txt += "\n"
 
-            st.text_area("📋 Copy Rekap WhatsApp:", value=res_txt, height=250)
-            # F. TOMBOL SHARE KE WHATSAPP
-if res_txt.strip():
-    wa_encoded = quote(res_txt.strip())
-    wa_url = f"https://wa.me/?text={wa_encoded}"
-    
-    st.markdown(f"""
-        <a href="{wa_url}" target="_blank" style="
-            display: block;
-            text-align: center;
-            padding: 12px;
-            background-color: #25D366;
-            color: white !important;
-            text-decoration: none;
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: bold;
-            margin-top: 10px;
-        ">
-            📤 SHARE KE WHATSAPP
-        </a>
-    """, unsafe_allow_html=True)
+            st.text_area("📋 Copy Rekap WhatsApp:", value=res_txt.strip(), height=250)
+
+            # F. TOMBOL SHARE KE WHATSAPP (Di dalam blok try, setelah res_txt dibuat)
+            if res_txt.strip():
+                wa_encoded = quote(res_txt.strip())
+                wa_url = f"https://wa.me/?text={wa_encoded}"
+                
+                st.markdown(f"""
+                    <a href="{wa_url}" target="_blank" style="
+                        display: block; text-align: center; padding: 12px;
+                        background-color: #25D366; color: white !important;
+                        text-decoration: none; border-radius: 8px;
+                        font-size: 15px; font-weight: bold; margin-top: 10px;
+                    ">📤 SHARE KE WHATSAPP</a>
+                """, unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"Terjadi kesalahan: {e}")
