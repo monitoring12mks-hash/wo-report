@@ -50,11 +50,11 @@ def get_links(d_from, d_to):
     enc = lambda s: quote(s)
     base = "https://vcare.visionet.co.id/Report/DownloadReportByStatus"
     return {
+        "Assigning": f"{base}?DateFrom={enc(f_from)}&DateTo={enc(f_to)}&WorkActivity=Assigning",
         "Scheduled": f"{base}?DateFrom={enc(f_from)}&DateTo={enc(f_to)}&WorkActivity=Scheduled",
         "Booked": f"{base}?DateFrom={enc(f_from)}&DateTo={enc(f_to)}&WorkActivity=Booked",
         "On Progress": f"{base}?DateFrom={enc(f_from)}&DateTo={enc(f_to)}&WorkActivity=On%20Progress"
     }
-
 # --- UI UTAMA ---
 st.title("📲 WO Monitoring & SLA")
 
