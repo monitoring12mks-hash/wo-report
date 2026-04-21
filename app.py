@@ -9,8 +9,17 @@ st.set_page_config(page_title="WO Reporter SLA Pro", layout="centered")
 
 st.markdown("""
     <style>
+    /* Menyembunyikan elemen dekorasi Streamlit */
     .stApp { background-color: white; color: black; }
-    header, footer {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    #MainMenu {visibility: hidden;}
+    .stDeployButton {display:none;}
+    
+    /* Menghilangkan tombol 'Manage app' dan elemen status di bagian bawah */
+    [data-testid="manage-app-button"] {display: none;}
+    [data-testid="stStatusWidget"] {visibility: hidden;}
+    
     [data-testid="stFileUploadDropzone"] { border: 2px dashed #1565c0; background-color: #f0f7ff; }
     p, span, label, div { color: black !important; }
     
@@ -55,6 +64,7 @@ def get_links(d_from, d_to):
         "Booked": f"{base}?DateFrom={enc(f_from)}&DateTo={enc(f_to)}&WorkActivity=Booked",
         "On Progress": f"{base}?DateFrom={enc(f_from)}&DateTo={enc(f_to)}&WorkActivity=On%20Progress"
     }
+
 # --- UI UTAMA ---
 st.title("📲 WO Monitoring & SLA")
 
@@ -110,8 +120,12 @@ if uploaded_files:
             dfs.append(temp)
 
         df = pd.concat(dfs, ignore_index=True)
-        df['EngineerName'] = df['EngineerName'].fillna("BELUM DI-ASSIGN")
-        df['ActualTargetDate'] = df['ActualTargetDate'].fillna(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        
+        # Penanganan khusus status Assigning yang mungkin kosong
+        if 'EngineerName' in df.columns:
+            df['EngineerName'] = df['EngineerName'].fillna("BELUM DI-ASSIGN")
+        if 'ActualTargetDate' in df.columns:
+            df['ActualTargetDate'] = df['ActualTargetDate'].fillna(now_jkt.strftime("%Y-%m-%d %H:%M:%S"))
 
         # C. FILTER BLACKLIST
         if not df.empty and 'TicketNo' in df.columns:
@@ -174,7 +188,7 @@ if uploaded_files:
 
             st.text_area("📋 Copy Rekap WhatsApp:", value=res_txt.strip(), height=250)
 
-            # F. TOMBOL SHARE KE WHATSAPP (Di dalam blok try, setelah res_txt dibuat)
+            # F. TOMBOL SHARE KE WHATSAPP
             if res_txt.strip():
                 wa_encoded = quote(res_txt.strip())
                 wa_url = f"https://wa.me/?text={wa_encoded}"
