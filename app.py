@@ -172,6 +172,27 @@ if uploaded_files:
                 res_txt += "\n"
 
             st.text_area("📋 Copy Rekap WhatsApp:", value=res_txt, height=250)
+            # F. TOMBOL SHARE KE WHATSAPP
+if res_txt.strip():
+    wa_encoded = quote(res_txt.strip())
+    wa_url = f"https://wa.me/?text={wa_encoded}"
+    
+    st.markdown(f"""
+        <a href="{wa_url}" target="_blank" style="
+            display: block;
+            text-align: center;
+            padding: 12px;
+            background-color: #25D366;
+            color: white !important;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: bold;
+            margin-top: 10px;
+        ">
+            📤 SHARE KE WHATSAPP
+        </a>
+    """, unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"Terjadi kesalahan: {e}")
