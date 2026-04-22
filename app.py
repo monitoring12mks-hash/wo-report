@@ -9,17 +9,26 @@ st.set_page_config(page_title="WO Reporter SLA Pro", layout="centered")
 
 st.markdown("""
     <style>
-    /* Menyembunyikan elemen dekorasi Streamlit */
-    .stApp { background-color: white; color: black; }
+    /* 1. Menghilangkan Header, Footer, dan Menu Hamburger */
     header {visibility: hidden;}
     footer {visibility: hidden;}
     #MainMenu {visibility: hidden;}
     .stDeployButton {display:none;}
+
+    /* 2. Menghilangkan tombol 'Manage app' secara paksa */
+    [data-testid="manage-app-button"], 
+    .stApp > div:last-child > div:last-child {
+        display: none !important;
+        visibility: hidden !important;
+    }
     
-    /* Menghilangkan tombol 'Manage app' dan elemen status di bagian bawah */
-    [data-testid="manage-app-button"] {display: none;}
-    [data-testid="stStatusWidget"] {visibility: hidden;}
-    
+    /* 3. Menghilangkan elemen status/viewer di pojok kanan bawah */
+    [data-testid="stStatusWidget"] {
+        display: none !important;
+    }
+
+    /* Styling Standar Aplikasi */
+    .stApp { background-color: white; color: black; }
     [data-testid="stFileUploadDropzone"] { border: 2px dashed #1565c0; background-color: #f0f7ff; }
     p, span, label, div { color: black !important; }
     
@@ -81,15 +90,12 @@ with col2:
 links = get_links(start_date, end_date)
 
 st.subheader("Langkah 1: Download Data")
-if device_mode == "💻 PC / Laptop":
-    st.markdown('<div class="info-box"><b>💻 MODE PC AKTIF</b><br>Klik tombol satu per satu dan tentukan folder penyimpanan Anda.</div>', unsafe_allow_html=True)
-
 for name, url in links.items():
     st.markdown(f'<a href="{url}" target="_blank" class="btn-download">📥 DOWNLOAD {name.upper()}</a>', unsafe_allow_html=True)
 
 st.markdown("---")
 
-# SEKSI UPLOAD & PROSES
+# 4. SEKSI UPLOAD & PROSES
 st.subheader("Langkah 2: Upload & Rekap")
 
 if 'reset_key' not in st.session_state:
@@ -120,8 +126,6 @@ if uploaded_files:
             dfs.append(temp)
 
         df = pd.concat(dfs, ignore_index=True)
-        
-        # Penanganan khusus status Assigning yang mungkin kosong
         if 'EngineerName' in df.columns:
             df['EngineerName'] = df['EngineerName'].fillna("BELUM DI-ASSIGN")
         if 'ActualTargetDate' in df.columns:
@@ -171,12 +175,9 @@ if uploaded_files:
                         target_dt = r['ActualTargetDate_DT'].replace(tzinfo=tz_jkt)
                         selisih = (target_dt - now_jkt).total_seconds() / 3600
                         
-                        if selisih <= 0:
-                            color, sym_status = "#d32f2f", "❌"
-                        elif selisih <= 2:
-                            color, sym_status = "#fbc02d", "⚠️"
-                        else:
-                            color, sym_status = "#2e7d32", "✅"
+                        color, sym_status = "#2e7d32", "✅"
+                        if selisih <= 0: color, sym_status = "#d32f2f", "❌"
+                        elif selisih <= 2: color, sym_status = "#fbc02d", "⚠️"
                         
                         jam = r['ActualTargetDate_DT'].strftime('%H:%M')
                         display = f"• {r['MerchantName']} - {r['WorkActivity']} <span style='color:{color}; font-weight:bold;'>[{jam}]</span>"
@@ -188,19 +189,11 @@ if uploaded_files:
 
             st.text_area("📋 Copy Rekap WhatsApp:", value=res_txt.strip(), height=250)
 
-            # F. TOMBOL SHARE KE WHATSAPP
+            # F. SHARE WHATSAPP
             if res_txt.strip():
                 wa_encoded = quote(res_txt.strip())
                 wa_url = f"https://wa.me/?text={wa_encoded}"
-                
-                st.markdown(f"""
-                    <a href="{wa_url}" target="_blank" style="
-                        display: block; text-align: center; padding: 12px;
-                        background-color: #25D366; color: white !important;
-                        text-decoration: none; border-radius: 8px;
-                        font-size: 15px; font-weight: bold; margin-top: 10px;
-                    ">📤 SHARE KE WHATSAPP</a>
-                """, unsafe_allow_html=True)
+                st.markdown(f'<a href="{wa_url}" target="_blank" class="btn-download" style="background-color: #25D366;">📤 SHARE KE WHATSAPP</a>', unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"Terjadi kesalahan: {e}")
